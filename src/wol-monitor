@@ -101,7 +101,11 @@ def wol_monitor():
         try:
             gid = grp.getgrnam(group).gr_gid
         except KeyError:
-            print("Error: the UNIX group %r specified in the command line does not exist." % group, file=sys.stderr)
+            print(
+                "Error: the UNIX group %r specified in the command line does not exist."
+                % group,
+                file=sys.stderr,
+            )
             sys.exit(os.EX_USAGE)
         os.chown("/run/wol-monitor/wol-bus", os.getuid(), gid)
         os.chown("/run/wol-monitor", os.getuid(), gid)

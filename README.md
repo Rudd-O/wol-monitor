@@ -11,6 +11,18 @@ network server yourself -- all your programs must do is wait for bytes on
 the socket above (after connecting to the socket, of course), and then react
 accordingly.
 
+## Clients
+
+Your client should:
+
+1. `connect()` to `/run/wol-monitor/wol-bus`.
+2. `read()` one byte, in a loop, reacting when the `read()` returns one byte.
+3. reconnect to the bus if the bus goes away (`wol-monitor` was restarted).
+
+There is a demo client in `src/kodi-wol-starter` which, really roughly,
+attempts to run Kodi if it isn't running when you send a WOL packet.
+This client is not installed when you run `make install`.
+
 ## Security
 
 For security reasons, this program creates the socket as UNIX user `root`
