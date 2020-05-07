@@ -94,7 +94,7 @@ def wol_monitor():
 
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind("/run/wol-monitor/wol-bus")
-    os.chmod("/run/wol-monitor/wol-bus", 0o640)
+    os.chmod("/run/wol-monitor/wol-bus", 0o660)
 
     try:
         group = sys.argv[1]
