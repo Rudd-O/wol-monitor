@@ -1,0 +1,128 @@
+#!/usr/bin/python3
+
+"""This program monitors the WOL packets coming into the primary network
+interface, then writes to a FIFO that can be read by user programs to
+determine if WOL packets have arrived."""
+
+import errno
+import multiprocessing
+import os
+import select
+import socket
+import sys
+import threading
+import time
+
+
+def report(text, *args):
+    if args:
+        text = text % args
+    sys.stderr.write(text + "\n")
+    sys.stderr.flush()
+
+
+def wol_receive(server, queue):
+    clients = []
+    report("Started monitoring server socket.")
+    while True:
+        r, w, e = select.select([server, queue._reader] + clients, [], clients, None)
+        if r:
+            if r[0] == server:
+                try:
+                    client, addr = server.accept()
+                except Exception as exc:
+                    report("Error accepting connection from client: %s", exc)
+                else:
+                    report("New client %s.", client)
+                    clients.append(client)
+            elif r[0] == queue._reader:
+                evt = queue.get()
+                r2, w2, e2 = select.select([], clients, [], 0)
+                if w2:
+                    report("Notifying %s clients of wakeup.", len(w2))
+                for client in w2:
+                    try:
+                        client.send(b"1")
+                    except Exception as exc:
+                        report(
+                            "Error notifying client %s: %s.  Removing client.",
+                            client,
+                            exc,
+                        )
+                        client.close()
+                        clients.remove(client)
+            elif r[0] in clients:
+                client = r[0]
+                try:
+                    c = client.recv(1)
+                except Exception as exc:
+                    report(
+                        "Error reading from client %s: %s.  Removing client.",
+                        client,
+                        exc,
+                    )
+                else:
+                    if len(c) == 0:
+                        report(
+                            "Client %s sent zero-length message.  Removing client.",
+                            client,
+                        )
+                    else:
+                        report("Client %s wrote to us.  Removing client.", client)
+                client.close()
+                clients.remove(client)
+        elif e:
+            for client in e:
+                report("Client %s had error.  Removing client.", client)
+                client.close()
+                clients.remove(client)
+
+
+def wol_monitor():
+    try:
+        os.makedirs("/run/wol-monitor")
+    except OSError as e:
+        if e.errno != errno.EEXIST:
+            raise
+
+    os.umask(0000)
+    if os.path.exists("/run/wol-monitor/wol-bus"):
+        os.remove("/run/wol-monitor/wol-bus")
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind("/run/wol-monitor/wol-bus")
+    server.listen(2)
+    queue = multiprocessing.Queue()
+    threading.Thread(target=wol_receive, args=(server, queue)).start()
+
+    publicip = ""
+    ports = [9, 40000]
+    socks = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for p in ports]
+    [sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) for sock in socks]
+    [sock.bind((publicip, ports[i])) for i, sock in enumerate(socks)]
+
+    report("Started monitoring WOL sockets.")
+
+    try:
+        while True:
+            r, w, e = select.select(socks, [], socks, None)
+            if e:
+                p = ports[socks.index(e[0])]
+                report("Error monitoring WOL socket on port %d.  Exiting.", p)
+                break
+            if r:
+                p = ports[socks.index(r[0])]
+                report(
+                    "WOL socket on port %d received wake.  Sending signal to bus.", p
+                )
+                queue.put(p)
+            time.sleep(10)
+            # Now discard whatever may be in the socket, to prevent DoS
+            while r:
+                r[0].recv(9000)
+                r, w, e = select.select(socks, [], [], 0)
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    wol_monitor()

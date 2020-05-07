@@ -1,0 +1,11 @@
+[Unit]
+Description=Wake-on-LAN monitor service
+After=network.target network-online.target
+
+[Service]
+Type=simple
+ExecStart=@LIBEXECDIR@/wol-monitor
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
