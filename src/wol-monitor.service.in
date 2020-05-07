@@ -4,7 +4,9 @@ After=network.target network-online.target
 
 [Service]
 Type=simple
-ExecStart=@LIBEXECDIR@/wol-monitor
+Environment=WOL_GROUP=root
+EnvironmentFile=@SYSCONFDIR@/default/wol-monitor
+ExecStart=@LIBEXECDIR@/wol-monitor "$WOL_GROUP"
 PrivateTmp=true
 
 [Install]

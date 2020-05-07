@@ -5,6 +5,7 @@ interface, then writes to a FIFO that can be read by user programs to
 determine if WOL packets have arrived."""
 
 import errno
+import grp
 import multiprocessing
 import os
 import select
@@ -79,17 +80,34 @@ def wol_receive(server, queue):
 
 
 def wol_monitor():
+    os.umask(0o037)
     try:
         os.makedirs("/run/wol-monitor")
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
 
-    os.umask(0000)
+    os.chmod("/run/wol-monitor", 0o750)
+
     if os.path.exists("/run/wol-monitor/wol-bus"):
         os.remove("/run/wol-monitor/wol-bus")
+
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind("/run/wol-monitor/wol-bus")
+    os.chmod("/run/wol-monitor/wol-bus", 0o640)
+
+    try:
+        group = sys.argv[1]
+        try:
+            gid = grp.getgrnam(group).gr_gid
+        except KeyError:
+            print("Error: the UNIX group %r specified in the command line does not exist." % group, file=sys.stderr)
+            sys.exit(os.EX_USAGE)
+        os.chown("/run/wol-monitor/wol-bus", os.getuid(), gid)
+        os.chown("/run/wol-monitor", os.getuid(), gid)
+    except IndexError:
+        pass
+
     server.listen(2)
     queue = multiprocessing.Queue()
     threading.Thread(target=wol_receive, args=(server, queue)).start()

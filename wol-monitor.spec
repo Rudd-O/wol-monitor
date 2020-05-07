@@ -3,7 +3,7 @@
 %define mybuildnumber %{?build_number}%{?!build_number:1}
 
 Name:           wol-monitor
-Version:        0.0.1
+Version:        0.0.2
 Release:        %{mybuildnumber}%{?dist}
 Summary:        Monitor for Wake-on-LAN packets.
 BuildArch:      noarch
@@ -20,6 +20,7 @@ BuildRequires:  systemd-rpm-macros
 
 %{?systemd_requires}
 Requires:       python3
+Requires(pre): shadow-utils
 
 %description
 This program runs as a service listening on ports 9 and 40000 (UDP), then
@@ -32,17 +33,24 @@ file system.
 
 %build
 # variables must be kept in sync with install
-make DESTDIR=$RPM_BUILD_ROOT LIBEXECDIR=%{_libexecdir} UNITDIR=%{_unitdir}
+make DESTDIR=$RPM_BUILD_ROOT LIBEXECDIR=%{_libexecdir} UNITDIR=%{_unitdir} PRESETDIR=%{_presetdir} SYSCONFDIR=%{_sysconfdir}
 
 %install
 rm -rf $RPM_BUILD_ROOT
 # variables must be kept in sync with build
-make install DESTDIR=$RPM_BUILD_ROOT LIBEXECDIR=%{_libexecdir} UNITDIR=%{_unitdir} PRESETDIR=%{_presetdir}
+make install DESTDIR=$RPM_BUILD_ROOT LIBEXECDIR=%{_libexecdir} UNITDIR=%{_unitdir} PRESETDIR=%{_presetdir} SYSCONFDIR=%{_sysconfdir}
+mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/default
+echo WOL_GROUP=wol > $RPM_BUILD_ROOT/%{_sysconfdir}/default/%{name}
 
 %files
 %attr(0755, root, root) %{_libexecdir}/%{name}
 %config %attr(0644, root, root) %{_unitdir}/%{name}.service
+%config(noreplace) %attr(0644, root, root) %{_sysconfdir}/default/%{name}
 %attr(0644, root, root) %{_presetdir}/75-%{name}.preset
+%doc README.md
+
+%pre
+getent group wol >/dev/null || groupadd -r wol || true
 
 %post
 %systemd_post %{name}.service
@@ -54,5 +62,5 @@ make install DESTDIR=$RPM_BUILD_ROOT LIBEXECDIR=%{_libexecdir} UNITDIR=%{_unitdi
 %systemd_postun_with_restart %{name}.service
 
 %changelog
-* Wed May 07 2020 Manuel Amador (Rudd-O) <rudd-o@rudd-o.com>
+* Thu May 7 2020 Manuel Amador (Rudd-O) <rudd-o@rudd-o.com>
 - Initial release

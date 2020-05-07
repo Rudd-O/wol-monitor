@@ -1,4 +1,5 @@
 LIBEXECDIR=/usr/local/libexec
+SYSCONFDIR=/usr/local/etc
 UNITDIR=/etc/systemd/system
 PRESETDIR=/etc/systemd/system
 PROGNAME=wol-monitor
@@ -7,7 +8,11 @@ DESTDIR=
 all: src/wol-monitor.service
 
 src/wol-monitor.service: src/wol-monitor.service.in
-	sed 's|@LIBEXECDIR@|$(LIBEXECDIR)|g' < $< > $@
+	cd $(ROOT_DIR) && \
+	cat $< | \
+	sed "s|@LIBEXECDIR@|$(LIBEXECDIR)|" | \
+	sed "s|@SYSCONFDIR@|$(SYSCONFDIR)|" \
+	> $@
 
 ROOT_DIR := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
