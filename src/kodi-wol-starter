@@ -41,7 +41,9 @@ def start_xbmc_if_not_started():
     xbmcs = ["kodi-x11", "kodi-xrandr", "kodi-wayland"]
     if _in_(xbmcs, exes):
         # XBMC is running.  Raise its window, then return.
-        subprocess.call("xdotool search --desktop 0 --all --class --name Kodi windowactivate".split())
+        subprocess.call(
+            "xdotool search --desktop 0 --all --class --name Kodi windowactivate".split()
+        )
         return
     p = subprocess.Popen("kodi-standalone")
     print("Starting XBMC", file=sys.stderr)
