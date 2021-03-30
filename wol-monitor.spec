@@ -3,7 +3,7 @@
 %define mybuildnumber %{?build_number}%{?!build_number:1}
 
 Name:           wol-monitor
-Version:        0.0.4
+Version:        0.0.5
 Release:        %{mybuildnumber}%{?dist}
 Summary:        Monitor for Wake-on-LAN packets.
 BuildArch:      noarch
