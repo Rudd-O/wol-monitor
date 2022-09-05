@@ -4,6 +4,7 @@
 interface, then writes to a FIFO that can be read by user programs to
 determine if WOL packets have arrived."""
 
+import binascii
 import errno
 import grp
 import multiprocessing
@@ -14,12 +15,27 @@ import sys
 import threading
 import time
 
+import psutil
+
+
+SIXBYTES = bytes([255]) * 6
+
 
 def report(text, *args):
     if args:
         text = text % args
     sys.stderr.write(text + "\n")
     sys.stderr.flush()
+
+
+def get_macs():
+    for interface, snics in psutil.net_if_addrs().items():
+        for snic in snics:
+            if snic.family == psutil.AF_LINK:
+                if snic.address == "00:00:00:00:00:00":
+                    continue
+                yield snic.address
+
 
 
 def wol_receive(server, queue):
@@ -118,8 +134,9 @@ def wol_monitor():
 
     publicip = ""
     ports = [9, 40000]
-    socks = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM) for p in ports]
+    socks = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) for p in ports]
     [sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) for sock in socks]
+    [sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) for sock in socks]
     [sock.bind((publicip, ports[i])) for i, sock in enumerate(socks)]
 
     report("Started monitoring WOL sockets.")
@@ -132,16 +149,61 @@ def wol_monitor():
                 report("Error monitoring WOL socket on port %d.  Exiting.", p)
                 break
             if r:
+                data = r[0].recv(9000)
+
+                # Can we find the lead?
+                index = data.find(SIXBYTES)
+                if index == -1:
+                    continue
+                index = index + len(SIXBYTES)
+
+                # Can we read all six copies of the MAC?
+                first, second, third, fourth, fifth, sixth = (
+                    data[index:index+6],
+                    data[index+6:index+12],
+                    data[index+12:index+18],
+                    data[index+18:index+24],
+                    data[index+24:index+30],
+                    data[index+30:index+36],
+                )
+
+                # Are all six copies the same?
+                if (
+                    first != second
+                    or
+                    second != third
+                    or
+                    third != fourth
+                    or
+                    fourth != fifth
+                    or
+                    fifth != sixth
+                ):
+                    continue
+
+                # Does one of the known MAC addresses match the sent data?
+                mac = binascii.hexlify(first, ":").decode("ascii")
+                my_macs = get_macs()
+                found = False
+                for my_mac in my_macs:
+                    if my_mac == mac:
+                        found = True
+                if not found:
+                    continue
+
                 p = ports[socks.index(r[0])]
                 report(
                     "WOL socket on port %d received wake.  Sending signal to bus.", p
                 )
                 queue.put(p)
-            time.sleep(10)
-            # Now discard whatever may be in the socket, to prevent DoS
-            while r:
-                r[0].recv(9000)
-                r, w, e = select.select(socks, [], [], 0)
+                time.sleep(10)
+                # Now discard whatever may be in the socket, to prevent DoS
+                while True:
+                    r, _, _ = select.select(socks, [], [], 0)
+                    if r:
+                        r[0].recv(9000)
+                    else:
+                        break
     except KeyboardInterrupt:
         pass
 

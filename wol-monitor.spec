@@ -3,7 +3,7 @@
 %define mybuildnumber %{?build_number}%{?!build_number:1}
 
 Name:           wol-monitor
-Version:        0.0.5
+Version:        0.1.0
 Release:        %{mybuildnumber}%{?dist}
 Summary:        Monitor for Wake-on-LAN packets.
 BuildArch:      noarch
@@ -20,6 +20,7 @@ BuildRequires:  systemd-rpm-macros
 
 %{?systemd_requires}
 Requires:       python3
+Requires:       python3-psutil
 Requires(pre): shadow-utils
 
 %description
