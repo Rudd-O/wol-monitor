@@ -37,7 +37,6 @@ def get_macs():
                 yield snic.address
 
 
-
 def wol_receive(server, queue):
     clients = []
     report("Started monitoring server socket.")
@@ -95,6 +94,44 @@ def wol_receive(server, queue):
                 clients.remove(client)
 
 
+def is_magic_packet(data: bytes) -> bool:
+    # Can we find the lead?
+    index = data.find(SIXBYTES)
+    if index == -1:
+        return False
+    index = index + len(SIXBYTES)
+
+    # Can we read all six copies of the MAC?
+    first, second, third, fourth, fifth, sixth = (
+        data[index : index + 6],
+        data[index + 6 : index + 12],
+        data[index + 12 : index + 18],
+        data[index + 18 : index + 24],
+        data[index + 24 : index + 30],
+        data[index + 30 : index + 36],
+    )
+
+    # Are all six copies the same?
+    if (
+        first != second
+        or second != third
+        or third != fourth
+        or fourth != fifth
+        or fifth != sixth
+    ):
+        return False
+
+    # Does one of the known MAC addresses match the sent data?
+    mac = binascii.hexlify(first, ":").decode("ascii")
+    my_macs = get_macs()
+    found = False
+    for my_mac in my_macs:
+        if my_mac == mac:
+            found = True
+    if not found:
+        return False
+
+
 def wol_monitor():
     os.umask(0o037)
     try:
@@ -134,7 +171,10 @@ def wol_monitor():
 
     publicip = ""
     ports = [9, 40000]
-    socks = [socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP) for p in ports]
+    socks = [
+        socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        for p in ports
+    ]
     [sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) for sock in socks]
     [sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) for sock in socks]
     [sock.bind((publicip, ports[i])) for i, sock in enumerate(socks)]
@@ -150,45 +190,7 @@ def wol_monitor():
                 break
             if r:
                 data = r[0].recv(9000)
-
-                # Can we find the lead?
-                index = data.find(SIXBYTES)
-                if index == -1:
-                    continue
-                index = index + len(SIXBYTES)
-
-                # Can we read all six copies of the MAC?
-                first, second, third, fourth, fifth, sixth = (
-                    data[index:index+6],
-                    data[index+6:index+12],
-                    data[index+12:index+18],
-                    data[index+18:index+24],
-                    data[index+24:index+30],
-                    data[index+30:index+36],
-                )
-
-                # Are all six copies the same?
-                if (
-                    first != second
-                    or
-                    second != third
-                    or
-                    third != fourth
-                    or
-                    fourth != fifth
-                    or
-                    fifth != sixth
-                ):
-                    continue
-
-                # Does one of the known MAC addresses match the sent data?
-                mac = binascii.hexlify(first, ":").decode("ascii")
-                my_macs = get_macs()
-                found = False
-                for my_mac in my_macs:
-                    if my_mac == mac:
-                        found = True
-                if not found:
+                if not is_magic_packet(data):
                     continue
 
                 p = ports[socks.index(r[0])]
