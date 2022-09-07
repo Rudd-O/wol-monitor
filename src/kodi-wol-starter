@@ -4,7 +4,6 @@
 bus, nominally located at /run/wol-monitor/wol-bus, then running XBMC in
 response to writes to that bus."""
 
-import errno
 import glob
 import os
 import socket
@@ -15,7 +14,12 @@ import time
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk
+from gi.repository import Gtk  # noqa
+
+
+ACTIVATE_KODI_CMD = (
+    "xdotool search --desktop 0 --all --class --name Kodi windowactivate"
+)
 
 
 def _in_(needles, haystack):
@@ -25,9 +29,15 @@ def _in_(needles, haystack):
     return False
 
 
+def report(text: str, *args):
+    if args:
+        text = text % args
+    print(text, file=sys.stderr)
+
+
 def start_xbmc_if_not_started():
     if "--test" in sys.argv[1:]:
-        print("Simulating start of XBMC", file=sys.stderr)
+        report("Simulating start of XBMC")
         return
     processes = glob.glob("/proc/*/exe")
 
@@ -42,20 +52,20 @@ def start_xbmc_if_not_started():
     if _in_(xbmcs, exes):
         # XBMC is running.  Raise its window, then return.
         subprocess.call(
-            "xdotool search --desktop 0 --all --class --name Kodi windowactivate".split()
+            ACTIVATE_KODI_CMD,
+            shell=True,
         )
         return
     p = subprocess.Popen("kodi-standalone")
-    print("Starting XBMC", file=sys.stderr)
+    report("Starting XBMC")
     collector = threading.Thread(target=lambda: p.wait())
-    collector.setDaemon(True)
+    collector.daemon = True
     collector.start()
 
 
 class WOLWatcher(threading.Thread):
     def __init__(self):
-        threading.Thread.__init__(self)
-        self.setDaemon(True)
+        threading.Thread.__init__(self, daemon=True)
 
     def run(self):
         while True:
@@ -65,7 +75,10 @@ class WOLWatcher(threading.Thread):
                     bus.connect("/run/wol-monitor/wol-bus")
                     break
                 except Exception as e:
-                    print("Error trying to connect to bus:", e, file=sys.stderr)
+                    report(
+                        "Error trying to connect to bus: %s",
+                        e,
+                    )
                     time.sleep(5)
             char = "1"
             while char:
@@ -74,7 +87,10 @@ class WOLWatcher(threading.Thread):
                     if char:
                         start_xbmc_if_not_started()
                 except Exception as e:
-                    print("Error reading from bus:", e, file=sys.stderr)
+                    report(
+                        "Error reading from bus: %s",
+                        e,
+                    )
                     char = ""
             bus.close()
 
