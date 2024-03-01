@@ -3,7 +3,7 @@
 %define mybuildnumber %{?build_number}%{?!build_number:1}
 
 Name:           wol-monitor
-Version:        0.1.2
+Version:        0.2.0
 Release:        %{mybuildnumber}%{?dist}
 Summary:        Monitor for Wake-on-LAN packets.
 BuildArch:      noarch
@@ -33,8 +33,6 @@ file system.
 Summary:  A demo client for wol-monitor that starts Kodi when a WOL packet is received.
 
 Requires: python3
-Requires: python3-gobject
-Requires: gtk3
 Requires: kodi
 Requires: xdotool
 

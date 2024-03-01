@@ -4,21 +4,17 @@
 bus, nominally located at /run/wol-monitor/wol-bus, then running XBMC in
 response to writes to that bus."""
 
-import glob
-import os
 import socket
 import subprocess
 import sys
-import threading
 import time
-import gi
-
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk  # noqa
+import threading
 
 
 ACTIVATE_KODI_CMD = (
     "xdotool search --desktop 0 --all --class --name Kodi windowactivate"
+    " || "
+    "kwin_wmgmt_helper Kodi"
 )
 
 
@@ -37,36 +33,22 @@ def report(text: str, *args):
 
 def start_xbmc_if_not_started():
     if "--test" in sys.argv[1:]:
-        report("Simulating start of XBMC")
+        report("Simulating start of Kodi")
         return
-    processes = glob.glob("/proc/*/exe")
 
-    def resolve(p):
-        try:
-            return os.path.basename(os.readlink(p))
-        except Exception:
-            return ""
-
-    exes = [resolve(p) for p in processes]
-    xbmcs = ["kodi-x11", "kodi-xrandr", "kodi-wayland"]
-    if _in_(xbmcs, exes):
-        # XBMC is running.  Raise its window, then return.
-        subprocess.call(
-            ACTIVATE_KODI_CMD,
-            shell=True,
-        )
-        return
-    p = subprocess.Popen("kodi-standalone")
-    report("Starting XBMC")
-    collector = threading.Thread(target=lambda: p.wait())
-    collector.daemon = True
-    collector.start()
+    report("Searching for Kodi window")
+    if 0 != subprocess.call(
+        ACTIVATE_KODI_CMD,
+        shell=True,
+    ):
+        report("Starting Kodi")
+        p = subprocess.Popen("kodi-standalone")
+        collector = threading.Thread(target=lambda: p.wait())
+        collector.daemon = True
+        collector.start()
 
 
-class WOLWatcher(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self, daemon=True)
-
+class WOLWatcher:
     def run(self):
         while True:
             bus = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -80,23 +62,16 @@ class WOLWatcher(threading.Thread):
                         e,
                     )
                     time.sleep(5)
-            char = "1"
-            while char:
-                try:
-                    char = bus.recv(1)
-                    if char:
-                        start_xbmc_if_not_started()
-                except Exception as e:
-                    report(
-                        "Error reading from bus: %s",
-                        e,
-                    )
-                    char = ""
+            try:
+                while bus.recv(1):
+                    start_xbmc_if_not_started()
+            except Exception as e:
+                report(
+                    "Error reading from bus: %s",
+                    e,
+                )
             bus.close()
 
 
-if __name__ == "__main__":
-    Gtk.init(sys.argv)
-    watcher = WOLWatcher()
-    watcher.start()
-    Gtk.main()
+watcher = WOLWatcher()
+watcher.run()
