@@ -20,8 +20,7 @@ BuildRequires:  systemd-rpm-macros
 
 %{?systemd_requires}
 Requires:       python3
-Requires:       python3-psutil
-Requires(pre): shadow-utils
+Requires(pre):  shadow-utils
 
 %description
 This program runs as a service listening on ports 9 and 40000 (UDP), then
@@ -30,7 +29,7 @@ messages), it reacts by writing to a well-known socket in the local
 file system.
 
 %package -n kodi-wol-starter
-Summary:  A demo client for wol-monitor that starts Kodi when a WOL packet is received.
+Summary:  A demo client for wol-monitor that starts or activates Kodi when a WOL packet is received.
 
 Requires: python3
 Requires: kodi
@@ -38,8 +37,9 @@ Requires: xdotool
 
 %description -n kodi-wol-starter
 This is a demo client for wol-monitor that starts Kodi (if it is not running)
-when a Wake-on-LAN packet is received.  It is set to autostart in your user
-session when you log into your desktop.
+or activates its main window (if it is running) when a Wake-on-LAN packet is
+received by wol-monitor.  It is set to autostart in your user session when you
+log into your desktop.
 
 %prep
 %setup -q
